@@ -1,4 +1,4 @@
-all: select_libs upload
+all: upload
 
 select_libs:
 	cp lib/adafruit_rfm9x.py src/lib/
@@ -10,6 +10,6 @@ select_libs:
 #flash:
 #	sudo ./BOSSA-1.8/bin/bossac -e -w -v -R ./adafruit-circuitpython-feather_m0_rfm9x-3.0.0.bin
 
-upload: select_libs
+upload:
 	cp -r src/* /media/brennen/CIRCUITPY/
 	sync
