@@ -93,6 +93,7 @@ print('Waiting for packets...')
 # Main loop runs forever printing the location, etc. every second.
 last_print = time.monotonic()
 while True:
+    pixels.fill(GREEN)
     # 0.5 is the default timeout, but may tweak:
     packet = rfm9x.receive(timeout=0.5)
 
@@ -100,6 +101,7 @@ while True:
     if packet is None:
         print('Received nothing! Listening again...')
     else:
+        pixels.fill(RED)
         # Received a packet!
         # Print out the raw bytes of the packet:
         print('Received (raw bytes): {0}'.format(packet))
@@ -155,9 +157,5 @@ while True:
         if gps.height_geoid is not None:
             print('Height geo ID: {} meters'.format(gps.height_geoid))
 
-    pixels.fill(GREEN)
-    pixels.show()
-    time.sleep(1)
     pixels.fill(BLUE)
     pixels.show()
-    time.sleep(1)
