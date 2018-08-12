@@ -1,14 +1,5 @@
 """glitter positioning system"""
 
-# bno stuff:
-        #print('Temperature: {} degrees C'.format(bno.temperature))
-        #print('Accelerometer (m/s^2): {}'.format(bno.accelerometer))
-        #print('Magnetometer (microteslas): {}'.format(bno.magnetometer))
-        #print('Gyroscope (deg/sec): {}'.format(bno.gyroscope))
-        #print('Euler angle: {}'.format(bno.euler))
-        #print('Quaternion: {}'.format(bno.quaternion))
-        #print('Linear acceleration (m/s^2): {}'.format(bno.linear_acceleration))
-        #print('Gravity (m/s^2): {}'.format(bno.gravity))
 
 import gc
 import rtc
@@ -19,7 +10,6 @@ import board
 import busio
 import digitalio
 import neopixel
-import adafruit_bno055
 import math
 
 # Colors for status lights, etc.
@@ -29,6 +19,22 @@ GREEN = (0, 255, 0)
 CYAN = (0, 255, 255)
 BLUE = (0, 0, 255)
 PURPLE = (180, 0, 255)
+
+MAN_ID = 23
+ELECTRICITY_ID = 42
+
+COLOR_LOOKUP = {
+    0: GREEN,
+    1: BLUE,
+    2: PURPLE,
+    3: YELLOW,
+    4: CYAN,
+    5: (100, 0, 255),
+    6: (0, 100, 200),
+    7: (100, 50, 100),
+    MAN_ID: RED,
+    ELECTRICITY_ID: (220, 47, 207)
+}
 
 RADIO_FREQ_MHZ = 915.0
 CS = digitalio.DigitalInOut(board.D10)
@@ -43,12 +49,14 @@ class glitterpos:
         # Our id and the dict for storing coords of other Electrons:
         self.electron_id = 1
         self.electrons = {
-            23: (40.786462, -119.206686) # The Man
+            MAN_ID: (40.786462, -119.206686),
+            # ELECTRICITY_ID: (40.795726, -119.213651) # maybe the real location of camp
+            ELECTRICITY_ID: (40.178828, -105.106807) # actually roosevelt park in longmont
         }
 
         # Set the RTC to an obviously bogus time for debugging purposes:
         # time_struct takes: (tm_year, tm_mon, tm_mday, tm_hour, tm_min, tm_sec, tm_wday, tm_yday, tm_isdst)
-        # rtc.RTC().datetime = time.struct_time((2000, 1, 1, 0, 0, 0, 0, 0, 0))
+        rtc.RTC().datetime = time.struct_time((2000, 1, 1, 0, 0, 0, 0, 0, 0))
         print("startup time: " + self.timestamp())
         self.time_set = False
         self.last_send = time.monotonic()
@@ -56,13 +64,26 @@ class glitterpos:
         self.current_lat = 0
         self.current_lon = 0
 
+        # Status light on the board, we'll use to indicate GPS fix, etc.:
         self.statuslight = neopixel.NeoPixel(board.NEOPIXEL, 1, brightness=0.01, auto_write=True)
         self.statuslight.fill(RED)
+
+        # Neopixel ring:
         self.pixels = neopixel.NeoPixel(board.A1, 16, brightness=0.01, auto_write=False)
+
+        # Startup animation:
+        for i in range(len(self.pixels)):
+            self.pixels[i] = GREEN
+            self.pixels.show()
+            time.sleep(0.2)
+        self.pixels.fill((0,0,0))
+        self.pixels[0] = PURPLE
+        self.pixels.show()
 
         # i2c = busio.I2C(board.SCL, board.SDA)
         # self.bno = adafruit_bno055.BNO055(i2c)
         # self.bno.mode = adafruit_bno055.COMPASS_MODE
+        # or!  self.compass = adafruit_lsm303.LSM303(i2c)
 
         self.init_radio()
         time.sleep(1)
@@ -84,17 +105,15 @@ class glitterpos:
         gps = adafruit_gps.GPS(uart)
 
         # https://cdn-shop.adafruit.com/datasheets/PMTK_A11.pdf
-
-        # Turn on the basic GGA and RMC info (what you typically want)
+        # Turn on the basic GGA and RMC info (what you typically want), then
+        # set update to once a second:
         gps.send_command('PMTK314,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0')
-
-        # Set update rate to once a second (1hz) which is what you typically want.
         gps.send_command('PMTK220,1000')
 
         self.gps = gps
 
     def advance_frame(self):
-        """main program loop"""
+        """Main program loop."""
 
         current = time.monotonic()
 
@@ -107,7 +126,9 @@ class glitterpos:
             # Try again if we don't have a fix yet.
             return
 
-        if (not new_gps_data) or (current - self.last_send > 10):
+        self.display_pixels()
+
+        if (not new_gps_data) and (current - self.last_send < 10):
             return
 
         # Set the RTC to GPS time (UTC):
@@ -126,15 +147,14 @@ class glitterpos:
         self.statuslight.fill(BLUE)
         print(':: ' + str(current))  # Print a separator line.
         print(self.timestamp())
-        send_packet = '{},{},{},{}'.format(
+        send_packet = "{}\t{}\t{}\t{}".format(
             self.gps.latitude,
             self.gps.longitude,
             self.gps.speed_knots,
             self.gps.track_angle_deg
         )
 
-        # print('   quality: {}'.format(gps.fix_quality))
-        print('   angle to man: ' + str(self.compass_bearing((self.current_lat, self.current_lon), self.electrons[7])))
+        print('   quality: {}'.format(self.gps.fix_quality))
         print(self.timestamp())
         self.radio_send(send_packet)
         print('   ' + str(gc.mem_free()) + " bytes free")
@@ -142,8 +162,8 @@ class glitterpos:
     def radio_send(self, msg):
         """send a packet over radio with id prefix and checksum"""
         # XXX: implement checksum
-        send_packet = 'e' + str(self.electron_id) + ':' + msg
-        print("   sending " + send_packet)
+        send_packet = "e\t" + str(self.electron_id) + "\t" + msg
+        print("   sending: " + send_packet)
 
         # Blocking, max of 252 bytes:
         self.rfm9x.send(send_packet)
@@ -163,8 +183,8 @@ class glitterpos:
         print('   received signal strength: {0} dB'.format(rssi))
         print('   received (raw bytes): {0}'.format(packet))
 
-        if packet.startswith(b'e'):
-            print("got prefix")
+        # if packet.startswith(b'e'):
+        #    print("got prefix")
 
         # Ok, I'm going to bed, but here is where I want to define:
         #   - a delimiter, so it's broken into fields
@@ -174,10 +194,23 @@ class glitterpos:
         # xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
         # that's actually a ton of room.  can definitely fit an id and coordinates in there.  what else would
-        # be worth having?  gps heading and speed, i suppose.  
+        # be worth having?  gps heading and speed, i suppose.
 
         # packet_text = str(packet, 'ascii')
         # print('Received (ASCII): {0}'.format(packet_text))
+
+    def display_pixels(self):
+        self.pixels.fill((0, 0, 0))
+
+        for electron in self.electrons:
+            angle_to_electron = self.compass_bearing((self.current_lat, self.current_lon), self.electrons[electron])
+            # print('angle to ' + str(electron) + ': ' + str(angle_to_electron))
+
+            # Subtract from 16 since the neopixel ring runs counterclockwise:
+            pixel = 16 - int(round((angle_to_electron / 360) * 16))
+            self.pixels[pixel] = COLOR_LOOKUP[electron]
+
+        self.pixels.show()
 
     # https://gist.githubusercontent.com/jeromer/2005586/raw/5456a9386acce189ac6cc416c42e9c4b560a633b/compassbearing.py
     def compass_bearing(self, pointA, pointB):
