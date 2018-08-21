@@ -1,4 +1,4 @@
-from glitterpos import glitterpos
-gp = glitterpos()
+from glitterpos import GlitterPOS
+gp = GlitterPOS()
 while True:
     gp.advance_frame()

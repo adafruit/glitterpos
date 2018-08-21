@@ -1,5 +1,10 @@
 Here's some GPS and compass crap:
 
+        # i2c = busio.I2C(board.SCL, board.SDA)
+        # self.bno = adafruit_bno055.BNO055(i2c)
+        # self.bno.mode = adafruit_bno055.COMPASS_MODE
+        # or!  self.compass = adafruit_lsm303.LSM303(i2c)
+
         # lsm303 testing:
           # acc_x, acc_y, acc_z = self.compass.acceleration
           # mag_x, mag_y, mag_z = self.compass.magnetic
