@@ -3,7 +3,6 @@ import math
 import adafruit_lsm303
 import board
 import busio
-import neopixel
 
 i2c = busio.I2C(board.SCL, board.SDA)
 compass = adafruit_lsm303.LSM303(i2c)
@@ -26,11 +25,6 @@ def calibrate_compass(compass):
     print("LSM303 Calibration")
     lastDisplayTime = time.monotonic()
     while True:
-
-        # Get a new sensor event */
-        # sensors_event_t accelEvent;
-        # sensors_event_t magEvent;
-
         acc_x, acc_y, acc_z = compass.raw_acceleration
         mag_x, mag_y, mag_z = compass.raw_magnetic
 
