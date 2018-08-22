@@ -1,6 +1,6 @@
 import time
 import math
-import adafruit_lsm303
+import adafruit_lsm9ds1
 import board
 import busio
 import neopixel
@@ -8,8 +8,12 @@ import neopixel
 PURPLE = (180, 0, 255)
 
 i2c = busio.I2C(board.SCL, board.SDA)
-compass = adafruit_lsm303.LSM303(i2c)
+compass = adafruit_lsm9ds1.LSM9DS1_I2C(i2c)
 pixels = neopixel.NeoPixel(board.A1, 16, brightness=0.01, auto_write=False)
+
+# (x, y, z) tuples:
+MAG_MIN = (-0.25046, -0.23506, -0.322)
+MAG_MAX = (0.68278, 0.70882, 0.59654)
 
 def bearing_to_pixel(bearing, count=16):
     pixel = count - int(round((bearing / 360) * count))
@@ -17,20 +21,33 @@ def bearing_to_pixel(bearing, count=16):
         pixel = 0
     return pixel
 
+def map_range(x, in_min, in_max, out_min, out_max):
+    """
+    Maps a number from one range to another.
+    Note: This implementation handles values < in_min differently than arduino's map function does.
+    :return: Returns value mapped to new range
+    :rtype: float
+    """
+    mapped = (x-in_min) * (out_max - out_min) / (in_max-in_min) + out_min
+    if out_min <= out_max:
+        return max(min(mapped, out_max), out_min)
+
+    return min(max(mapped, out_max), out_min)
+
 while True:
+    mag_x, mag_y, mag_z = compass.magnetometer
 
-# float heading = 180 * atan2(magRaw[1],magRaw[0])/M_PI;
-# if(heading < 0)
-#     heading += 360;
+    mag_x = map_range(mag_x, MAG_MIN[0], MAG_MAX[0], -1, 1)
+    mag_y = map_range(mag_y, MAG_MIN[1], MAG_MAX[1], -1, 1)
+    mag_z = map_range(mag_z, MAG_MIN[2], MAG_MAX[2], -1, 1)
 
-    raw_mag_x, raw_mag_y, raw_mag_z = compass.raw_magnetic
-    compass_heading = (math.atan2(raw_mag_y, raw_mag_x) * 180) / math.pi;
+    compass_heading = (math.atan2(mag_y, mag_x) * 180) / math.pi;
     if compass_heading < 0:
         compass_heading = 360 + compass_heading;
 
     pixel = bearing_to_pixel(compass_heading)
 
-    print('Magnetometer: ({0:10.3f}, {1:10.3f}, {2:10.3f})'.format(raw_mag_x, raw_mag_y, raw_mag_z))
+    print('Magnetometer: ({0:10.3f}, {1:10.3f}, {2:10.3f})'.format(mag_x, mag_y, mag_z))
     print(compass_heading)
     print('Lighting pixel: {}'.format(pixel))
 
