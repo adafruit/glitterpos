@@ -2,16 +2,23 @@
 
 import time
 import gc
+import math
+import adafruit_lsm9ds1
 import adafruit_gps
 import adafruit_rfm9x
 import board
 import busio
-import crc16pure
 import digitalio
 import neopixel
 import rtc
-from glitterpos_util import timestamp, compass_bearing
-from glitterpos_id import MY_ID
+from glitterpos_util import timestamp, compass_bearing, bearing_to_pixel, map_range
+
+# glitterpos_id.py should be formatted as follows:
+#
+# MY_ID = 2 # must be a unique integer
+# MAG_MIN = (-0.25046, -0.23506, -0.322)
+# MAG_MAX = (0.68278, 0.70882, 0.59654)
+from glitterpos_id import MY_ID, MAG_MIN, MAG_MAX
 
 # Colors for status lights, etc.
 RED = (255, 0, 0)
@@ -23,6 +30,10 @@ PURPLE = (180, 0, 255)
 
 MAN_ID = 23
 ELECTRICITY_ID = 42
+
+# Magnetic North:
+DECLINATION_RAD = 145.4 / 1000.0 # Lyons in radians
+# DECLINATION = 235.27 / 1000.0 # Black Rock City in mrad
 
 COLOR_LOOKUP = {
     0: GREEN,
@@ -64,6 +75,7 @@ class GlitterPOS:
 
         # A tuple for our lat/long:
         self.coords = (0, 0)
+        self.heading = 0.0
 
         # Status light on the board, we'll use to indicate GPS fix, etc.:
         self.statuslight = neopixel.NeoPixel(board.NEOPIXEL, 1, brightness=0.005, auto_write=True)
@@ -71,23 +83,27 @@ class GlitterPOS:
 
         # Neopixel ring:
         self.pixels = neopixel.NeoPixel(board.A1, 16, brightness=0.01, auto_write=False)
-
-        # Startup animation:
-        for i in range(len(self.pixels)):
-            self.pixels[i] = GREEN
-            self.pixels.show()
-            time.sleep(0.2)
-        self.pixels.fill((0,0,0))
-        self.pixels[0] = PURPLE
-        self.pixels.show()
+        self.startup_animation()
+        time.sleep(2)
 
         self.init_radio()
-        time.sleep(1)
-
         self.init_gps()
-        time.sleep(1)
+        self.init_compass()
 
         self.statuslight.fill(YELLOW)
+
+    def startup_animation(self):
+        self.pixels[bearing_to_pixel(0)] = PURPLE
+        self.pixels.show()
+        time.sleep(.5)
+        self.pixels[bearing_to_pixel(90)] = GREEN
+        self.pixels.show()
+        time.sleep(.5)
+        self.pixels[bearing_to_pixel(180)] = YELLOW
+        self.pixels.show()
+        time.sleep(.5)
+        self.pixels[bearing_to_pixel(270)] = BLUE
+        self.pixels.show()
 
     def init_radio(self):
         """Set up RFM95."""
@@ -95,11 +111,13 @@ class GlitterPOS:
         self.rfm9x = adafruit_rfm9x.RFM9x(spi, CS, RESET, RADIO_FREQ_MHZ)
         self.rfm9x.tx_power = 18 # Default is 13 dB, but the RFM95 can go up to 23 dB
         self.radio_tx('d', 'hello world')
+        time.sleep(1)
 
     def init_gps(self):
         """Some GPS module setup."""
         uart = busio.UART(board.TX, board.RX, baudrate=9600, timeout=3000)
         gps = adafruit_gps.GPS(uart)
+        time.sleep(1)
 
         # https://cdn-shop.adafruit.com/datasheets/PMTK_A11.pdf
         # Turn on the basic GGA and RMC info (what you typically want), then
@@ -109,21 +127,24 @@ class GlitterPOS:
 
         self.gps = gps
 
+    def init_compass(self):
+        i2c = busio.I2C(board.SCL, board.SDA)
+        self.compass = adafruit_lsm9ds1.LSM9DS1_I2C(i2c)
+        time.sleep(1)
+
     def advance_frame(self):
         """Essentially our main program loop."""
 
         current = time.monotonic()
-
         self.radio_rx(timeout=0.5)
-
         new_gps_data = self.gps.update()
+        self.update_heading()
+        self.display_pixels()
 
         if not self.gps.has_fix:
             # Try again if we don't have a fix yet.
             self.statuslight.fill(RED)
             return
-
-        self.display_pixels()
 
         # We want to send coordinates out either on new GPS data or roughly every 15 seconds.
         if (not new_gps_data) and (current - self.last_send < 15):
@@ -148,7 +169,7 @@ class GlitterPOS:
             self.gps.latitude,
             self.gps.longitude,
             self.gps.speed_knots,
-            self.gps.track_angle_deg
+            self.heading
         )
 
         print('   quality: {}'.format(self.gps.fix_quality))
@@ -157,15 +178,33 @@ class GlitterPOS:
         # Send a location packet:
         self.radio_tx('l', send_packet)
 
+    def update_heading(self):
+        mag_x, mag_y, mag_z = self.compass.magnetometer
+        # print('Magnetometer: ({0:10.3f}, {1:10.3f}, {2:10.3f})'.format(mag_x, mag_y, mag_z))
+        mag_x = map_range(mag_x, MAG_MIN[0], MAG_MAX[0], -1, 1)
+        mag_y = map_range(mag_y, MAG_MIN[1], MAG_MAX[1], -1, 1)
+        mag_z = map_range(mag_z, MAG_MIN[2], MAG_MAX[2], -1, 1)
+
+        heading_mag = (math.atan2(mag_y, mag_x) * 180) / math.pi
+        if heading_mag < 0:
+            heading_mag = 360 + heading_mag
+
+        # Account for declination (given in radians above):
+        heading = heading_mag + (DECLINATION_RAD * 180 / math.pi)
+        if heading > 360:
+            heading = heading - 360
+
+        print('heading: {}'.format(heading))
+        self.heading = heading
+
     def radio_tx(self, msg_type, msg):
         """send a packet over radio with id prefix and checksum"""
         # XXX: implement checksum?
         packet = 'e:' + msg_type + ':' + str(self.electron_id) + ':' + msg
-        packet_with_crc = packet + ':' + str(crc16pure.crc16xmodem(bytes(packet, 'ascii')))
-        print('   sending: ' + packet_with_crc)
+        print('   sending: ' + packet)
 
         # Blocking, max of 252 bytes:
-        self.rfm9x.send(packet_with_crc)
+        self.rfm9x.send(packet)
         self.last_send = time.monotonic()
 
     def radio_rx(self, timeout=0.5):
@@ -202,12 +241,20 @@ class GlitterPOS:
     def display_pixels(self):
         self.pixels.fill((0, 0, 0))
 
-        for electron in self.electrons:
-            angle_to_electron = compass_bearing(self.coords, self.electrons[electron])
-            # print('angle to ' + str(electron) + ': ' + str(angle_to_electron))
+        if not self.gps.has_fix:
+            return
 
-            # Subtract from 16 since the neopixel ring runs counterclockwise:
-            pixel = 16 - int(round((angle_to_electron / 360) * 16))
+        for electron in self.electrons:
+            bearing_to_electron = compass_bearing(self.coords, self.electrons[electron])
+
+            # Treat current compass heading as our origin point for display purposes:
+            display_bearing = bearing_to_electron - self.heading
+            if display_bearing < 0:
+                display_bearing = display_bearing + 360
+
+            pixel = bearing_to_pixel(display_bearing)
+            # print('display pixel: {}'.format(pixel))
+
             color = (15, 15, 15)
             if electron in COLOR_LOOKUP:
                 color = COLOR_LOOKUP[electron]

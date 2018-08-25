@@ -1,3 +1,4 @@
+"""a handful of utility functions used by GlitterPOS."""
 import math
 import time
 
@@ -43,6 +44,25 @@ def compass_bearing(pointA, pointB):
     compass_bearing = (initial_bearing + 360) % 360
 
     return compass_bearing
+
+def bearing_to_pixel(bearing, count=16):
+    # Subtract from count since the neopixel ring runs counterclockwise:
+    pixel = count - int(round((bearing / 360) * count))
+    if pixel == 16:
+      return 0
+    return pixel
+
+def map_range(x, in_min, in_max, out_min, out_max):
+    """
+    Maps a number from one range to another.
+    :return: Returns value mapped to new range
+    :rtype: float
+    """
+    mapped = (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+    if out_min <= out_max:
+        return max(min(mapped, out_max), out_min)
+
+    return min(max(mapped, out_max), out_min)
 
 def timestamp():
     """print a human-readable timestamp"""
