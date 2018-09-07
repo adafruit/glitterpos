@@ -32,8 +32,8 @@ MAN_ID = 23
 ELECTRICITY_ID = 42
 
 # Magnetic North:
-DECLINATION_RAD = 145.4 / 1000.0 # Lyons in radians
-# DECLINATION = 235.27 / 1000.0 # Black Rock City in mrad
+# DECLINATION_RAD = 145.4 / 1000.0 # Lyons in radians
+DECLINATION_RAD = 235.27 / 1000.0 # the Man in radians
 
 COLOR_LOOKUP = {
     0: GREEN,
@@ -62,8 +62,8 @@ class GlitterPOS:
         self.electron_id = MY_ID
         self.electrons = {
             MAN_ID: (40.786462, -119.206686),
-            # ELECTRICITY_ID: (40.795726, -119.213651) # maybe the real location of camp
-            ELECTRICITY_ID: (40.178828, -105.106807) # actually roosevelt park in longmont
+            ELECTRICITY_ID: (40.795726, -119.213651) # maybe the real location of camp
+            # ELECTRICITY_ID: (40.178828, -105.106807) # actually roosevelt park in longmont
         }
 
         # Set the RTC to an obviously bogus time for debugging purposes:
