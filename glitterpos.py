@@ -13,15 +13,16 @@ import neopixel
 import rtc
 from glitterpos_util import timestamp, compass_bearing, bearing_to_pixel, map_range
 
-# glitterpos_id.py should be unique to each box, and formatted as follows:
+# glitterpos_cfg.py should be unique to each box, and formatted as follows:
 #
 # MY_ID = 0 # must be a unique integer
 # MAG_MIN = (-0.25046, -0.23506, -0.322)
 # MAG_MAX = (0.68278, 0.70882, 0.59654)
+# DECLINATION_RAD = 235.27 / 1000.0 # Black Rock City in radians
 #
 # From the CircuitPython REPL, use `import calibrate` to find values for
 # MAG_MIN and MAG_MAX.
-from glitterpos_id import MY_ID, MAG_MIN, MAG_MAX
+from glitterpos_cfg import MY_ID, MAG_MIN, MAG_MAX, DECLINATION_RAD
 
 # Colors for status lights, etc.
 RED = (255, 0, 0)
@@ -32,9 +33,6 @@ BLUE = (0, 0, 255)
 PURPLE = (180, 0, 255)
 
 MAN_ID = 23
-
-# Magnetic North - should be customized for your location:
-DECLINATION_RAD = 235.27 / 1000.0 # Black Rock City in radians
 
 COLOR_LOOKUP = {
     0: GREEN,
