@@ -9,4 +9,4 @@ MAG_MIN = [-0.1883, -0.16002, -0.53634]
 MAG_MAX = [0.5887, 0.72618, 0.19474]
 
 # Magnetic North - should be customized for your rough location:
-DECLINATION_RAD = 235.27 / 1000.0 # Black Rock City in radians
+DECLINATION_RAD = 0.1451 # Declination for Boulder, CO

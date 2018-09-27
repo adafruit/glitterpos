@@ -32,7 +32,7 @@ CYAN = (0, 255, 255)
 BLUE = (0, 0, 255)
 PURPLE = (180, 0, 255)
 
-MAN_ID = 23
+# BOULDER_ID = 23
 
 COLOR_LOOKUP = {
     0: GREEN,
@@ -43,7 +43,11 @@ COLOR_LOOKUP = {
     5: (100, 0, 255),
     6: (0, 100, 200),
     7: (100, 50, 100),
-    MAN_ID: RED,
+    # BOULDER_ID: RED
+}
+
+DEFAULT_BOX_COORDS = {
+    # BOULDER_ID: (40.018258, -105.278457)
 }
 
 RADIO_FREQ_MHZ = 915.0
@@ -58,9 +62,7 @@ class GlitterPOS:
 
         # Our id and the dict for storing coords of other glitterpos_boxes:
         self.glitterpos_id = MY_ID
-        self.glitterpos_boxes = {
-            MAN_ID: (40.786462, -119.206686),
-        }
+        self.glitterpos_boxes = DEFAULT_BOX_COORDS
 
         # Set the RTC to an obviously bogus time for debugging purposes:
         # time_struct takes: (tm_year, tm_mon, tm_mday, tm_hour, tm_min, tm_sec, tm_wday, tm_yday, tm_isdst)
@@ -216,7 +218,7 @@ class GlitterPOS:
         print('   received (raw bytes): {0}'.format(packet))
         pieces = packet.split(b':')
 
-        if pieces[0] != b'e':
+        if pieces[0] != b'e' or len(pieces) < 5:
             print('   bogus packet, bailing out')
             return
 
