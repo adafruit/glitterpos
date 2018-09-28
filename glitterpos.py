@@ -24,7 +24,7 @@ from glitterpos_util import timestamp, compass_bearing, bearing_to_pixel, map_ra
 # MAG_MIN and MAG_MAX.
 from glitterpos_cfg import MY_ID, MAG_MIN, MAG_MAX, DECLINATION_RAD
 
-# Colors for status lights, etc.
+# Colors for status lights, NeoPixel ring, etc.:
 RED = (255, 0, 0)
 YELLOW = (255, 150, 0)
 GREEN = (0, 255, 0)
@@ -34,6 +34,7 @@ PURPLE = (180, 0, 255)
 
 # BOULDER_ID = 23
 
+# Color presets for each glitterpos_id:
 COLOR_LOOKUP = {
     0: GREEN,
     1: BLUE,
@@ -46,6 +47,7 @@ COLOR_LOOKUP = {
     # BOULDER_ID: RED
 }
 
+# You can add fixed points here:
 DEFAULT_BOX_COORDS = {
     # BOULDER_ID: (40.018258, -105.278457)
 }
@@ -91,6 +93,7 @@ class GlitterPOS:
         self.statuslight.fill(YELLOW)
 
     def startup_animation(self):
+        """Initialize NeoPixel test pattern."""
         self.pixels[bearing_to_pixel(0)] = PURPLE
         self.pixels.show()
         time.sleep(.5)
@@ -107,12 +110,12 @@ class GlitterPOS:
         """Set up RFM95."""
         spi = busio.SPI(board.SCK, MOSI=board.MOSI, MISO=board.MISO)
         self.rfm9x = adafruit_rfm9x.RFM9x(spi, CS, RESET, RADIO_FREQ_MHZ)
-        self.rfm9x.tx_power = 18 # Default is 13 dB, but the RFM95 can go up to 23 dB
+        self.rfm9x.tx_power = 18 # Default is 13 dB; the RFM95 goes up to 23 dB
         self.radio_tx('d', 'hello world')
         time.sleep(1)
 
     def init_gps(self):
-        """Some GPS module setup."""
+        """Set up GPS module."""
         uart = busio.UART(board.TX, board.RX, baudrate=9600, timeout=3000)
         gps = adafruit_gps.GPS(uart)
         time.sleep(1)
@@ -126,12 +129,22 @@ class GlitterPOS:
         self.gps = gps
 
     def init_compass(self):
+        """Set up LSM9DS1."""
         i2c = busio.I2C(board.SCL, board.SDA)
         self.compass = adafruit_lsm9ds1.LSM9DS1_I2C(i2c)
         time.sleep(1)
 
     def advance_frame(self):
-        """Essentially our main program loop."""
+        """
+        Check the radio for new packets, poll GPS and compass data, send a
+        radio packet if coordinates have changed (or if it's been a while), and
+        update NeoPixel display.  Called in an infinite loop by code.py.
+
+        To inspect the state of the system, initialize a new GlitterPOS object
+        from the CircuitPython REPL, and call gp.advance_frame() manually.  You
+        can then access the instance variables defined in __init__() and
+        init_()* methods.
+        """
 
         current = time.monotonic()
         self.radio_rx(timeout=0.5)
@@ -144,7 +157,8 @@ class GlitterPOS:
             self.statuslight.fill(RED)
             return
 
-        # We want to send coordinates out either on new GPS data or roughly every 15 seconds.
+        # We want to send coordinates out either on new GPS data or roughly
+        # every 15 seconds:
         if (not new_gps_data) and (current - self.last_send < 15):
             return
 
@@ -238,6 +252,8 @@ class GlitterPOS:
         """Display current state on the NeoPixel ring."""
         self.pixels.fill((0, 0, 0))
 
+        # We can't meaningfully point at other locations if we don't know our
+        # own position:
         if not self.gps.has_fix:
             return
 
