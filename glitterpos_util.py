@@ -48,7 +48,7 @@ def compass_bearing(pointA, pointB):
 def bearing_to_pixel(bearing, count=16):
     # Subtract from count since the neopixel ring runs counterclockwise:
     pixel = count - int(round((bearing / 360) * count))
-    if pixel == 16:
+    if pixel == count:
       return 0
     return pixel
 
