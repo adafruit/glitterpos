@@ -209,7 +209,7 @@ class GlitterPOS:
         self.heading = heading
 
     def radio_tx(self, msg_type, msg):
-        """send a packet over radio with id prefix and checksum"""
+        """send a packet over radio with id prefix"""
         packet = 'e:' + msg_type + ':' + str(self.glitterpos_id) + ':' + msg
         print('   sending: ' + packet)
 
