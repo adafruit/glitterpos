@@ -32,7 +32,7 @@ except ImportError:
     pass # not always supported by every board!
 import array
 import digitalio
-import pulseio
+import pwmio
 
 def tone(pin, frequency, duration=1, length=100):
     """
@@ -44,7 +44,7 @@ def tone(pin, frequency, duration=1, length=100):
     :param int duration: Duration of tone in seconds (optional)
     """
     try:
-        with pulseio.PWMOut(pin, frequency=int(frequency), variable_frequency=False) as pwm:
+        with pwmio.PWMOut(pin, frequency=int(frequency), variable_frequency=False) as pwm:
             pwm.duty_cycle = 0x8000
             time.sleep(duration)
     except ValueError:
@@ -198,7 +198,7 @@ class Servo:
             time.sleep(2)
     """
     def __init__(self, pin, min_pulse=0.5, max_pulse=2.5):
-        self.pwm = pulseio.PWMOut(pin, frequency=50)
+        self.pwm = pwmio.PWMOut(pin, frequency=50)
         self.min_pulse = min_pulse
         self.max_pulse = max_pulse
         self._angle = None
